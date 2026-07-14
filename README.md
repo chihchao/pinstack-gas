@@ -36,6 +36,8 @@
 
 > 欄位順序很重要：後端部分邏輯以欄位索引直接讀寫（例如 `posts` 的 `poster` 需固定在第 6 欄 F），請勿自行調整欄位順序。
 
+可直接複製以下 Google 試算表範例，並另存為自己的副本：[Google 試算表範例](https://docs.google.com/spreadsheets/d/1vrcEXzIXhx7VGIa5aaYK1r-Jo4qdCfubxUjJKazGN1c/edit?usp=sharing)
+
 ### 2. 建立 Apps Script 專案
 
 在試算表中點選「擴充功能」→「Apps Script」，開啟綁定的指令碼專案：
