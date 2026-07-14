@@ -1,0 +1,11 @@
+CLAUDE.md
+.clasp.json
+
+# macOS
+.DS_Store
+
+# Google Drive Desktop sync artifacts
+.tmp.driveupload/
+.tmp.drivedownload/
+*(Conflicted copy*)*
+* (1).*

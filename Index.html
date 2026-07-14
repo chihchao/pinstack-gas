@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Pinstack 看板分享平台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen flex flex-col">
+
+  <!-- 導覽列 -->
+  <header class="bg-indigo-600 text-white shadow-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+      <h1 class="text-xl font-bold cursor-pointer flex items-center space-x-2" onclick="navigateTo('home')">
+        <i class="fa-solid fa-clipboard-list"></i> <span>Pinstack極簡看板</span>
+      </h1>
+      <div class="flex items-center space-x-4">
+        <span id="userDisplay" onclick="promptChangeNickname()" class="text-xs bg-indigo-700 hover:bg-indigo-800 px-3 py-1.5 rounded-full cursor-pointer transition">
+          <i class="fa-solid fa-user"></i> 設定暱稱中...
+        </span>
+        <button id="adminBtn" onclick="toggleAdminMode()" class="text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full font-bold transition">
+          <i class="fa-solid fa-lock"></i> 管理員模式
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 主內容區 -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+    
+    <!-- 讀取動效 -->
+    <div id="loading" class="flex justify-center items-center py-20">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+    </div>
+
+    <!-- 首頁：看板列表 -->
+    <div id="view-home" class="hidden">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold">熱門看板區</h2>
+        <button id="newPageBtn" onclick="openPageModal()" class="hidden bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm shadow">
+          <i class="fa-solid fa-plus"></i> 新增看板
+        </button>
+      </div>
+      <div id="pagesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    </div>
+
+    <!-- 看板內頁：貼文瀑布流 -->
+    <div id="view-page" class="hidden">
+      <div class="mb-6 flex flex-col md:flex-row md:items-center md:justify-between border-b pb-4">
+        <div>
+          <button onclick="navigateTo('home')" class="text-indigo-600 hover:underline text-sm mb-2 inline-block">
+            <i class="fa-solid fa-arrow-left"></i> 返回首頁
+          </button>
+          <h2 id="currentPageTitle" class="text-3xl font-bold"></h2>
+          <p id="currentPageDesc" class="text-gray-500 text-sm mt-1"></p>
+        </div>
+        <div class="mt-4 md:mt-0 flex items-center space-x-3">
+          <button onclick="copyPageLink()" class="bg-white border border-indigo-200 hover:bg-indigo-50 text-indigo-600 px-4 py-2.5 rounded-lg text-sm shadow-sm font-medium">
+            <i class="fa-solid fa-link"></i> 複製分享連結
+          </button>
+          <button id="newPostBtn" onclick="openPostModal()" class="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg text-sm shadow font-medium">
+            <i class="fa-solid fa-pen"></i> 發表新貼文
+          </button>
+        </div>
+      </div>
+      <div id="postsContainer" class="columns-1 sm:columns-2 lg:columns-3 gap-6 space-y-6"></div>
+    </div>
+
+  </main>
+
+  <!-- ================= 彈窗集合 ================= -->
+  
+  <!-- 初始暱稱填寫彈窗 -->
+  <div id="nicknameModal" class="fixed inset-0 bg-black/60 hidden flex justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl">
+      <h3 class="text-lg font-bold mb-2 text-indigo-600"><i class="fa-solid fa-user-tag"></i> 歡迎光臨！</h3>
+      <p class="text-xs text-gray-500 mb-4">本平台免登入，請先設定一個在平台上顯示的發表人暱稱：</p>
+      <input type="text" id="initialNicknameInput" class="w-full border rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none mb-4" placeholder="例如：幸運草">
+      <button onclick="saveInitialNickname()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg text-sm transition">進入網站</button>
+    </div>
+  </div>
+
+  <!-- 看板編輯彈窗 -->
+  <div id="pageModal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl">
+      <h3 id="pageModalTitle" class="text-lg font-bold mb-4">新增看板</h3>
+      <input type="hidden" id="modalPageId">
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">看板名稱</label>
+          <input type="text" id="pageTitleInput" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">看板描述</label>
+          <textarea id="pageDescInput" class="w-full border rounded-lg p-2 text-sm h-24 focus:ring-2 focus:ring-indigo-500 outline-none"></textarea>
+        </div>
+        <div id="closedContainer" class="hidden flex items-center space-x-2">
+          <input type="checkbox" id="pageClosedInput" class="rounded text-indigo-600">
+          <label for="pageClosedInput" class="text-sm font-medium text-red-600">關閉此看板（不允許新增/修改貼文）</label>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeModal('pageModal')" class="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100">取消</button>
+        <button onclick="submitPage()" class="px-4 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg">儲存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 貼文編輯彈窗 -->
+  <div id="postModal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-xl p-6 max-w-lg w-full shadow-2xl overflow-y-auto max-h-[90vh]">
+      <h3 id="postModalTitle" class="text-lg font-bold mb-4">發表新貼文</h3>
+      <input type="hidden" id="modalPostId">
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">內文說明</label>
+          <textarea id="postContentInput" class="w-full border rounded-lg p-2 text-sm h-28 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="寫點什麼吧..."></textarea>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">參考網址 (選填)</label>
+          <input type="url" id="postUrlInput" class="w-full border rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="https://example.com">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">上傳圖片 (自動壓縮 &lt;300k)</label>
+          <input type="file" id="postFileInput" accept="image/*" class="w-full border rounded-lg p-2 text-sm text-gray-500">
+          <div id="imgPreviewContainer" class="mt-2 hidden">
+             <img id="imgPreview" class="max-h-40 rounded shadow-inner" src="" />
+          </div>
+        </div>
+      </div>
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="closeModal('postModal')" class="px-4 py-2 text-sm border rounded-lg hover:bg-gray-100">取消</button>
+        <button id="postSubmitBtn" onclick="submitPost()" class="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg">發布</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 貼文詳細暨留言彈窗 -->
+  <div id="detailModal" class="fixed inset-0 bg-black/50 hidden flex justify-center items-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+      <div class="p-4 border-b flex justify-between items-center bg-gray-50">
+        <span id="detailPoster" class="text-xs font-semibold bg-gray-200 text-gray-700 px-2.5 py-1 rounded"></span>
+        <button onclick="closeModal('detailModal')" class="text-gray-400 hover:text-gray-600 text-xl"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="p-6 overflow-y-auto flex-grow space-y-4">
+        <p id="detailContent" class="text-gray-800 whitespace-pre-wrap text-base"></p>
+        <div id="detailImgLink"></div>
+        <div id="detailUrlPreview"></div>
+        
+        <!-- 留言板塊 -->
+        <div class="border-t pt-4">
+          <h4 class="text-sm font-bold text-gray-700 mb-3"><i class="fa-regular fa-comments"></i> 留言回應</h4>
+          <div id="commentsList" class="space-y-3 mb-4"></div>
+          
+          <div class="flex space-x-2">
+            <input type="text" id="commentInput" placeholder="寫下你的回應..." class="flex-grow border rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500">
+            <button onclick="submitComment()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-medium">送出</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 前端 JS 邏輯 ================= -->
+  <script>
+    let currentUserNickname = '';
+    let adminPassword = '';
+    let isAdminMode = false;
+    let allPages = [];
+    let currentActivePageId = '';
+    let currentActivePostId = '';
+    let base64ImageStr = '';
+    // 網址帶入的 ?page=看板id（若有），首次載入完成後會自動開啟該看板
+    let pendingDeepLinkPageId = <?!= JSON.stringify(initialPageId) ?>;
+    // 正式的 Web App 網址（由後端 ScriptApp.getService().getUrl() 提供），用於組合分享連結
+    const BASE_APP_URL = <?!= JSON.stringify(baseAppUrl) ?>;
+
+    // 初始化載入
+    window.addEventListener('DOMContentLoaded', () => {
+      initUserNickname();
+      // 監聽圖片選擇並壓縮
+      document.getElementById('postFileInput').addEventListener('change', handleImageUpload);
+    });
+
+    // 檢查與初始化暱稱
+    function initUserNickname() {
+      const savedNickname = localStorage.getItem('pinstack_user_nickname');
+      if (savedNickname) {
+        currentUserNickname = savedNickname;
+        updateUserDisplay();
+        loadPages();
+      } else {
+        document.getElementById('nicknameModal').classList.remove('hidden');
+        showLoading(false);
+      }
+    }
+
+    function saveInitialNickname() {
+      const input = document.getElementById('initialNicknameInput').value.trim();
+      if (!input) return alert('請填寫一個暱稱才能進入網站喔！');
+      localStorage.setItem('pinstack_user_nickname', input);
+      currentUserNickname = input;
+      document.getElementById('nicknameModal').classList.add('hidden');
+      updateUserDisplay();
+      loadPages();
+    }
+
+    function updateUserDisplay() {
+      document.getElementById('userDisplay').innerHTML = `<i class="fa-solid fa-user"></i> 暱稱: ${escapeHtml(currentUserNickname)}`;
+    }
+
+    function promptChangeNickname() {
+      const newName = prompt("請輸入新的暱稱：", currentUserNickname);
+      if (newName && newName.trim()) {
+        currentUserNickname = newName.trim();
+        localStorage.setItem('pinstack_user_nickname', currentUserNickname);
+        updateUserDisplay();
+        if (currentActivePageId) viewPage(currentActivePageId);
+      }
+    }
+
+    function showLoading(show) {
+      document.getElementById('loading').style.display = show ? 'flex' : 'none';
+    }
+
+    function navigateTo(view) {
+      document.getElementById('view-home').classList.add('hidden');
+      document.getElementById('view-page').classList.add('hidden');
+      document.getElementById('view-' + view).classList.remove('hidden');
+    }
+
+    // 管理員切換（密碼驗證）
+    function toggleAdminMode() {
+      if (!isAdminMode) {
+        const pwd = prompt("請輸入管理員密碼：");
+        if (pwd === null) return; 
+        
+        showLoading(true);
+        google.script.run.withSuccessHandler(isValid => {
+          showLoading(false);
+          if (isValid) {
+            adminPassword = pwd;
+            isAdminMode = true;
+            updateAdminUI(true);
+          } else {
+            alert("密碼錯誤，拒絕存取！");
+          }
+        }).verifyAdminPassword(pwd);
+      } else {
+        adminPassword = '';
+        isAdminMode = false;
+        updateAdminUI(false);
+      }
+    }
+
+    function updateAdminUI(isCurrentAdmin) {
+      const btn = document.getElementById('adminBtn');
+      if (isCurrentAdmin) {
+        btn.innerHTML = `<i class="fa-solid fa-unlock"></i> 退出管理員`;
+        btn.className = "text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-full font-bold transition";
+        document.getElementById('newPageBtn').classList.remove('hidden');
+      } else {
+        btn.innerHTML = `<i class="fa-solid fa-lock"></i> 管理員模式`;
+        btn.className = "text-xs bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded-full font-bold transition";
+        document.getElementById('newPageBtn').classList.add('hidden');
+      }
+      loadPages();
+      if(currentActivePageId) viewPage(currentActivePageId);
+    }
+
+    // ================= 看板控制邏輯 =================
+    function loadPages() {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(pages => {
+          allPages = pages;
+          showLoading(false);
+
+          const grid = document.getElementById('pagesGrid');
+          grid.innerHTML = '';
+
+          if(!pages || pages.length === 0) {
+            grid.innerHTML = `<p class="col-span-full text-center text-gray-400 py-10">目前沒有任何看板</p>`;
+            navigateTo('home');
+            return;
+          }
+
+          pages.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+
+          pages.forEach(p => {
+            const dateStr = p.datetime ? new Date(p.datetime).toLocaleString() : '未知時間';
+            // 安全修正：使用屬性字串讀取，避開 GAS 引擎與後端引號解析誤判
+            const checkClosed = String(p['closed']);
+            const isClosed = (checkClosed === "true");
+            let adminControls = '';
+            
+            if (isAdminMode) {
+              adminControls = `
+                <div class="flex space-x-2 mt-4 pt-3 border-t">
+                  <button onclick="event.stopPropagation(); openPageModal('${p.id}')" class="text-xs text-blue-600 hover:underline"><i class="fa-solid fa-pen"></i> 編輯</button>
+                  <button onclick="event.stopPropagation(); deletePage('${p.id}')" class="text-xs text-red-600 hover:underline"><i class="fa-solid fa-trash"></i> 刪除</button>
+                </div>
+              `;
+            }
+
+            grid.innerHTML += `
+              <div onclick="viewPage('${p.id}')" class="bg-white rounded-xl shadow-sm hover:shadow-md p-5 border border-gray-100 transition cursor-pointer flex flex-col justify-between relative overflow-hidden">
+                ${isClosed ? '<span class="absolute top-0 right-0 bg-red-500 text-white text-[10px] uppercase font-bold px-3 py-1 rounded-bl">已關閉</span>' : ''}
+                <div>
+                  <h3 class="font-bold text-lg text-gray-900 mb-1.5">${escapeHtml(p.title)}</h3>
+                  <p class="text-gray-500 text-sm line-clamp-3 mb-4">${escapeHtml(p.description || '無描述')}</p>
+                </div>
+                <div>
+                  <span class="text-[11px] text-gray-400 block"><i class="fa-regular fa-clock"></i> 更新於：${dateStr}</span>
+                  ${adminControls}
+                </div>
+              </div>
+            `;
+          });
+
+          if (pendingDeepLinkPageId) {
+            const pageIdToOpen = pendingDeepLinkPageId;
+            pendingDeepLinkPageId = '';
+            if (allPages.find(x => x.id === pageIdToOpen)) {
+              viewPage(pageIdToOpen);
+            } else {
+              alert('找不到指定的看板，可能已被刪除。');
+              navigateTo('home');
+            }
+          } else {
+            navigateTo('home');
+          }
+        })
+        .withFailureHandler(err => {
+          showLoading(false);
+          alert("載入看板失敗，原因：" + err.message);
+        })
+        .getPages();
+    }
+
+    // 複製目前看板的分享連結（?page=看板id）到剪貼簿
+    function copyPageLink() {
+      if (!currentActivePageId) return;
+      const base = BASE_APP_URL || window.location.href.split('?')[0];
+      const link = base + '?page=' + encodeURIComponent(currentActivePageId);
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(link).then(() => {
+          alert('看板連結已複製到剪貼簿！\n' + link);
+        }).catch(() => {
+          prompt('請手動複製以下連結：', link);
+        });
+      } else {
+        prompt('請手動複製以下連結：', link);
+      }
+    }
+
+    function viewPage(pageId) {
+      currentActivePageId = pageId;
+      const page = allPages.find(x => x.id === pageId);
+      if(!page) return;
+
+      document.getElementById('currentPageTitle').innerText = page.title;
+      document.getElementById('currentPageDesc').innerText = page.description;
+      
+      // 關鍵修正：將屬性讀取方式改成字串陣列型態，徹底避開 GAS 的 Scriptlet 語法解析誤判
+      const checkClosedStatus = String(page['closed']); 
+      const isClosed = (checkClosedStatus === "true");
+      
+      const newPostBtn = document.getElementById('newPostBtn');
+      if (isClosed && !isAdminMode) {
+        newPostBtn.classList.add('hidden');
+      } else {
+        newPostBtn.classList.remove('hidden');
+      }
+
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(posts => {
+          showLoading(false);
+          navigateTo('page');
+          
+          const container = document.getElementById('postsContainer');
+          container.innerHTML = '';
+
+          if(!posts || posts.length === 0) {
+            container.innerHTML = `<p class="text-center text-gray-400 col-span-full py-10 w-full block">目前尚無貼文，快來搶沙發！</p>`;
+            return;
+          }
+
+          posts.sort((a,b) => new Date(b.datetime) - new Date(a.datetime));
+
+          posts.forEach(p => {
+            const hasImage = p.image ? true : false;
+            const hasUrl = p.url ? true : false;
+            const isOwner = (p.poster === currentUserNickname) || isAdminMode;
+            
+            let actionButtons = '';
+            // 關鍵修正：將 !isClosed 拆開判斷，避免驚嘆號與括號緊鄰被 GAS 誤認為 Scripflet
+            const canEdit = (!isClosed) || isAdminMode;
+            if (isOwner && canEdit) {
+              actionButtons = `
+                <div class="flex space-x-3 text-xs border-t pt-2 mt-3 text-gray-400">
+                  <button onclick="event.stopPropagation(); openPostModal('${p.id}')" class="hover:text-blue-600"><i class="fa-solid fa-marker"></i> 編輯</button>
+                  <button onclick="event.stopPropagation(); deletePost('${p.id}')" class="hover:text-red-600"><i class="fa-solid fa-trash-can"></i> 刪除</button>
+                </div>
+              `;
+            }
+
+            let urlPreviewHtml = '';
+            if(hasUrl) {
+              urlPreviewHtml = `
+                <div id="microlink-preview-${p.id}" class="block mt-2 bg-gray-50 rounded-lg border border-gray-100 p-2 text-xs transition" onclick="event.stopPropagation();">
+                  <a href="${p.url}" target="_blank" class="text-indigo-600 hover:underline flex items-center">
+                    <i class="fa-solid fa-spinner animate-spin mr-1.5 text-gray-400"></i> 正在擷取網頁預覽...
+                  </a>
+                </div>
+              `;
+              setTimeout(() => fetchMicrolinkData(p.id, p.url), 50);
+            }
+
+            const postDate = p.datetime ? new Date(p.datetime).toLocaleDateString() : '未知日期';
+            
+            let imageHtml = '';
+            if (hasImage) {
+              imageHtml = '<img src="' + p.image + '" class="w-full h-auto max-h-60 object-cover rounded-lg mb-3 shadow-inner" alt="貼文圖片">';
+            }
+
+            container.innerHTML += `
+              <div onclick="openDetailModal('${p.id}')" class="break-inside-avoid bg-white border rounded-xl shadow-sm hover:shadow-md transition p-4 mb-4 flex flex-col justify-between cursor-pointer">
+                <div>
+                  ${imageHtml}
+                  <p class="text-gray-800 text-sm whitespace-pre-wrap line-clamp-4">${escapeHtml(p.content)}</p>
+                  ${urlPreviewHtml}
+                </div>
+                <div class="mt-4">
+                  <div class="flex justify-between items-center text-[11px] text-gray-400 mb-2">
+                    <span class="truncate max-w-[120px] font-medium text-gray-500"><i class="fa-regular fa-user"></i> ${escapeHtml(p.poster)}</span>
+                    <span>${postDate}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <button onclick="event.stopPropagation(); likePost('${p.id}', this)" class="text-xs bg-gray-100 hover:bg-red-50 hover:text-red-600 px-2.5 py-1 rounded-full transition text-gray-600 flex items-center space-x-1">
+                      <i class="fa-solid fa-heart text-red-400"></i> <span class="like-count">${p.likes || 0}</span>
+                    </button>
+                    <span class="text-xs text-gray-400"><i class="fa-regular fa-comment"></i> 查看回應</span>
+                  </div>
+                  ${actionButtons}
+                </div>
+              </div>
+            `;
+          });
+        })
+        .withFailureHandler(err => {
+          showLoading(false);
+          alert("載入貼文失敗，原因：" + err.message);
+        })
+        .getPosts(pageId);
+    }
+
+    // ================= Microlink API 串接邏輯 =================
+    function fetchMicrolinkData(postId, targetUrl, customContainerId = null) {
+      const containerId = customContainerId || `microlink-preview-${postId}`;
+      const container = document.getElementById(containerId);
+      if (!container) return;
+
+      const apiUrl = `https://api.microlink.io?url=${encodeURIComponent(targetUrl)}`;
+
+      fetch(apiUrl)
+        .then(response => response.json())
+        .then(res => {
+          if (res.status === 'success' && res.data) {
+            const d = res.data;
+            const title = d.title || '瀏覽網頁';
+            const desc = d.description || targetUrl;
+            const image = d.image ? d.image.url : '';
+            const logo = d.logo ? d.logo.url : '';
+
+            let cardImageHtml = '';
+            if (image) {
+              cardImageHtml = '<img src="' + image + '" class="w-full sm:w-20 h-20 sm:h-auto object-cover flex-shrink-0 border-b sm:border-b-0 sm:border-r" />';
+            }
+
+            let logoHtml = '<i class="fa-solid fa-link text-gray-400"></i>';
+            if (logo) {
+              logoHtml = '<img src="' + logo + '" class="w-3 h-3 rounded-sm" />';
+            }
+
+            container.innerHTML = `
+              <a href="${targetUrl}" target="_blank" class="flex flex-col sm:flex-row bg-gray-50 hover:bg-gray-100 rounded-lg overflow-hidden border transition text-left group">
+                ${cardImageHtml}
+                <div class="p-2 flex flex-col justify-between overflow-hidden flex-grow">
+                  <div>
+                    <div class="flex items-center space-x-1 mb-1">
+                      ${logoHtml}
+                      <span class="font-bold text-gray-800 text-xs truncate block max-w-full group-hover:text-indigo-600">${escapeHtml(title)}</span>
+                    </div>
+                    <p class="text-[10px] text-gray-500 line-clamp-2 leading-tight">${escapeHtml(desc)}</p>
+                  </div>
+                  <span class="text-[9px] text-gray-400 mt-1 truncate block">${escapeHtml(targetUrl)}</span>
+                </div>
+              </a>
+            `;
+          } else {
+            fallbackUrlRender(container, targetUrl);
+          }
+        })
+        .catch(() => {
+          fallbackUrlRender(container, targetUrl);
+        });
+    }
+
+    function fallbackUrlRender(container, url) {
+      container.innerHTML = `
+        <a href="${url}" target="_blank" class="block bg-gray-50 rounded-lg p-2 border hover:bg-gray-100 text-xs text-indigo-600 font-medium truncate">
+          <i class="fa-solid fa-link text-gray-400 mr-1"></i> ${escapeHtml(url)}
+        </a>
+      `;
+    }
+
+    // ================= 看板增刪改彈窗 =================
+    function openPageModal(pageId = '') {
+      document.getElementById('pageModal').classList.remove('hidden');
+      if(!pageId) {
+        document.getElementById('pageModalTitle').innerText = "建立新畫板";
+        document.getElementById('modalPageId').value = "";
+        document.getElementById('pageTitleInput').value = "";
+        document.getElementById('pageDescInput').value = "";
+        document.getElementById('closedContainer').classList.add('hidden');
+      } else {
+        const p = allPages.find(x => x.id === pageId);
+        document.getElementById('pageModalTitle').innerText = "編輯畫板設定";
+        document.getElementById('modalPageId').value = p.id;
+        document.getElementById('pageTitleInput').value = p.title;
+        document.getElementById('pageDescInput').value = p.description;
+        document.getElementById('closedContainer').classList.remove('hidden');
+        document.getElementById('pageClosedInput').checked = (p['closed'] === "true" || p['closed'] === true);
+      }
+    }
+
+    function submitPage() {
+      const title = document.getElementById('pageTitleInput').value.trim();
+      const description = document.getElementById('pageDescInput').value.trim();
+      const id = document.getElementById('modalPageId').value;
+      const closed = document.getElementById('pageClosedInput').checked ? "true" : "false";
+
+      if(!title) return alert('請填寫看板標題');
+
+      showLoading(true);
+      closeModal('pageModal');
+      google.script.run.withSuccessHandler(() => {
+        loadPages();
+      }).withFailureHandler(err => {
+        showLoading(false);
+        alert("操作失敗：" + err.message);
+      }).savePage({ id, title, description, closed }, adminPassword);
+    }
+
+    function deletePage(id) {
+      if(confirm('確定要刪除此看板嗎？這將無法復原。')) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(() => {
+          loadPages();
+        }).withFailureHandler(err => {
+          showLoading(false);
+          alert("刪除失敗：" + err.message);
+        }).deletePage(id, adminPassword);
+      }
+    }
+
+    // ================= 貼文增刪改與圖片壓縮機制 =================
+    function openPostModal(postId = '') {
+      document.getElementById('postModal').classList.remove('hidden');
+      document.getElementById('postFileInput').value = '';
+      document.getElementById('imgPreviewContainer').classList.add('hidden');
+      base64ImageStr = '';
+
+      if(!postId) {
+        document.getElementById('postModalTitle').innerText = "張貼新貼文";
+        document.getElementById('modalPostId').value = "";
+        document.getElementById('postContentInput').value = "";
+        document.getElementById('postUrlInput').value = "";
+      } else {
+        showLoading(true);
+        google.script.run.withSuccessHandler(posts => {
+          showLoading(false);
+          const p = posts.find(x => x.id === postId);
+          document.getElementById('postModalTitle').innerText = "編輯貼文";
+          document.getElementById('modalPostId').value = p.id;
+          document.getElementById('postContentInput').value = p.content;
+          document.getElementById('postUrlInput').value = p.url;
+          if(p.image) {
+            document.getElementById('imgPreviewContainer').classList.remove('hidden');
+            document.getElementById('imgPreview').src = p.image;
+            base64ImageStr = p.image;
+          }
+        }).getPosts(currentActivePageId);
+      }
+    }
+
+    function handleImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          const max_size = 1200;
+          if (width > height && width > max_size) {
+            height *= max_size / width; width = max_size;
+          } else if (height > max_size) {
+            width *= max_size / height; height = max_size;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let quality = 0.9;
+          let dataUrl = '';
+          do {
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+            quality -= 0.1;
+          } while (dataUrl.length > 380000 && quality > 0.1); 
+
+          document.getElementById('imgPreviewContainer').classList.remove('hidden');
+          document.getElementById('imgPreview').src = dataUrl;
+          base64ImageStr = dataUrl;
+        }
+        img.src = event.target.result;
+      }
+      reader.readAsDataURL(file);
+    }
+
+    function submitPost() {
+      const content = document.getElementById('postContentInput').value.trim();
+      const url = document.getElementById('postUrlInput').value.trim();
+      const id = document.getElementById('modalPostId').value;
+
+      if(!content && !base64ImageStr) return alert('請填寫內文或上傳圖片。');
+
+      const submitBtn = document.getElementById('postSubmitBtn');
+      submitBtn.disabled = true;
+      submitBtn.innerText = "上傳處理中...";
+
+      if(base64ImageStr && base64ImageStr.startsWith('data:')) {
+        // 檔名改用貼文 id 命名；新貼文尚無 id，先於前端產生，再一併交給後端建立同一筆資料
+        const postId = id || generateClientId();
+        const fileName = postId + ".jpg";
+        google.script.run.withSuccessHandler(driveUrl => {
+          savePostFinal(postId, content, url, driveUrl);
+        }).withFailureHandler(err => {
+          alert("雲端硬碟儲存失敗：" + err.message);
+          submitBtn.disabled = false;
+          submitBtn.innerText = "發布";
+        }).uploadImage(base64ImageStr, fileName);
+      } else {
+        savePostFinal(id, content, url, base64ImageStr);
+      }
+    }
+
+    function generateClientId() {
+      return (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2));
+    }
+
+    function savePostFinal(id, content, url, imageUrl) {
+      google.script.run.withSuccessHandler(() => {
+        const btn = document.getElementById('postSubmitBtn');
+        btn.disabled = false;
+        btn.innerText = "發布";
+        closeModal('postModal');
+        viewPage(currentActivePageId);
+      }).withFailureHandler(err => {
+        alert(err.message);
+        const btn = document.getElementById('postSubmitBtn');
+        btn.disabled = false;
+        btn.innerText = "發布";
+      }).savePost({
+        id: id,
+        page_id: currentActivePageId,
+        content: content,
+        url: url,
+        image: imageUrl
+      }, currentUserNickname, adminPassword);
+    }
+
+    function deletePost(id) {
+      if(confirm('確定要刪除這篇貼文嗎？')) {
+        showLoading(true);
+        google.script.run.withSuccessHandler(() => {
+          viewPage(currentActivePageId);
+        }).withFailureHandler(err => {
+          showLoading(false);
+          alert(err.message);
+        }).deletePost(id, currentUserNickname, adminPassword);
+      }
+    }
+
+    function likePost(id, btnElement) {
+      google.script.run.withSuccessHandler(newLikes => {
+        btnElement.querySelector('.like-count').innerText = newLikes;
+        btnElement.classList.add('scale-110', 'text-red-600');
+        setTimeout(() => btnElement.classList.remove('scale-110'), 200);
+      }).likePost(id);
+    }
+
+    // ================= 貼文詳細與留言板控制 =================
+    function openDetailModal(postId) {
+      currentActivePostId = postId;
+      document.getElementById('detailModal').classList.remove('hidden');
+      document.getElementById('commentsList').innerHTML = '<div class="text-xs text-gray-400">載入留言中...</div>';
+      document.getElementById('commentInput').value = '';
+
+      google.script.run.withSuccessHandler(posts => {
+        const p = posts.find(x => x.id === postId);
+        document.getElementById('detailPoster').innerText = "發布者: " + p.poster;
+        document.getElementById('detailContent').innerText = p.content;
+        
+        const imgLinkDiv = document.getElementById('detailImgLink');
+        if (p.image) {
+          imgLinkDiv.innerHTML = '<img src="' + p.image + '" class="w-full h-auto rounded-lg shadow max-h-96 object-contain bg-black" />';
+        } else {
+          imgLinkDiv.innerHTML = '';
+        }
+
+        const urlDiv = document.getElementById('detailUrlPreview');
+        if (p.url) {
+          urlDiv.innerHTML = '<div id="detail-microlink-container" class="mt-2 text-xs"><i class="fa-solid fa-spinner animate-spin text-gray-400"></i> 正在擷取豐富預覽...</div>';
+          setTimeout(() => fetchMicrolinkData(p.id, p.url, 'detail-microlink-container'), 50);
+        } else {
+          urlDiv.innerHTML = '';
+        }
+
+        loadComments(postId);
+      }).getPosts(currentActivePageId);
+    }
+
+    function loadComments(postId) {
+      google.script.run.withSuccessHandler(messages => {
+        const list = document.getElementById('commentsList');
+        list.innerHTML = '';
+        if(!messages || messages.length === 0) {
+          list.innerHTML = '<p class="text-xs text-gray-400 italic">目前沒有任何人留言。</p>';
+          return;
+        }
+        messages.sort((a,b) => new Date(a.datetime) - new Date(b.datetime));
+        messages.forEach(m => {
+          const msgDate = m.datetime ? new Date(m.datetime).toLocaleString() : '未知時間';
+          list.innerHTML += `
+            <div class="bg-gray-50 rounded-lg p-2.5 border border-gray-100 text-xs">
+              <div class="flex justify-between font-bold text-gray-600 mb-1">
+                <span>${escapeHtml(m.messager)}</span>
+                <span class="text-[10px] font-normal text-gray-400">${msgDate}</span>
+              </div>
+              <p class="text-gray-700 text-sm whitespace-pre-wrap">${escapeHtml(m.message)}</p>
+            </div>
+          `;
+        });
+      }).getMessages(postId);
+    }
+
+    function submitComment() {
+      const input = document.getElementById('commentInput');
+      const text = input.value.trim();
+      if(!text) return;
+
+      google.script.run.withSuccessHandler(() => {
+        input.value = '';
+        loadComments(currentActivePostId);
+      }).addMessage({
+        post_id: currentActivePostId,
+        message: text
+      }, currentUserNickname);
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function escapeHtml(text) {
+      if(!text) return '';
+      return text.toString()
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+  </script>
+</body>
+</html>
